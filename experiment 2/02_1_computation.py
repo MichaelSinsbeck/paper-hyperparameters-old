@@ -63,12 +63,12 @@ t_m = time.time() - t_start
 #ll, nodes, n_eval = bbi.design_map(problem, field, n_iterations, n_subsample=n_subsample)
 #errors_m.append(bbi.compute_errors(ll_true, ll))
 
-np.savez('nongauss/03_main_ll.npz',
+np.savez('output/02_main_ll.npz',
          n_eval = n_eval,
          ll_m = ll_m
          )
 
-np.savez('nongauss/03_main.npz',
+np.savez('output/02_main.npz',
          n_eval = n_eval,
          nodes_m = nodes_m, 
          errors_m = errors_m, 
@@ -92,7 +92,7 @@ for i in range(n_random):
     errors_gpe.append(bbi.compute_errors(ll_true, this_ll))
     
 
-np.savez('nongauss/03_21_random_se.npz', 
+np.savez('output/02_21_random_se.npz', 
          nodes_gpe = nodes_gpe, 
          #ll_gpe = ll_gpe, 
          errors_gpe = errors_gpe)
@@ -155,7 +155,7 @@ for i_n, n0 in enumerate(starting_points):
     nodes_f.append(inner_nodes_f)
     nodes_r.append(inner_nodes_r)
     
-    filename = 'nongauss/03_pre_{}.npz'.format(n0)
+    filename = 'output/02_pre_{}.npz'.format(n0)
     np.savez(filename, 
              n_eval_pre = this_n_eval_f,
              nodes_f = inner_nodes_f,
@@ -164,37 +164,57 @@ for i_n, n0 in enumerate(starting_points):
              errors_r = np.array(inner_error_list_r))
 
 # save
-pickle.dump( n_eval_pre, open('nongauss/03_pre20_n_eval.pkl','wb'))
-pickle.dump( errors_f, open('nongauss/03_pre_errors_f.pkl','wb'))
-pickle.dump( errors_r, open('nongauss/03_pre_errors_r.pkl','wb'))
-pickle.dump( nodes_f, open('nongauss/03_pre_nodes_f.pkl', 'wb'))
-pickle.dump( nodes_r, open('nongauss/03_pre_nodes_r.pkl', 'wb'))
+pickle.dump( n_eval_pre, open('output/02_pre20_n_eval.pkl','wb'))
+pickle.dump( errors_f, open('output/02_pre_errors_f.pkl','wb'))
+pickle.dump( errors_r, open('output/02_pre_errors_r.pkl','wb'))
+pickle.dump( nodes_f, open('output/02_pre_nodes_f.pkl', 'wb'))
+pickle.dump( nodes_r, open('output/02_pre_nodes_r.pkl', 'wb'))
 
 
-        
-#%% Find "miracle"-Parameters
+#%% Determine miracle-parameters by hand
 
-np.random.seed(1)
-
-field = bbi.MixSquaredExponential([0.1, 10], [0.01, 1e4], n_output, anisotropy = 6)
+np.random.seed(0)
 
 errors_mir = []
 ll_mir = []
 nodes_mir = []
 
 for i_iter in range(n_repetitions):
-    nodes = bbi.Nodes()
-    idx = np.random.choice(n_sample, 120, replace=False)
-    nodes.append(idx, model_y[idx,:])
-    xi_miracle = field.get_map_xi(nodes,grid)
-
-    gpe = field.make_gpe(xi_miracle)
-    ll, nodes, _ = bbi.design_linearized(problem, gpe, n_iterations, n_subsample = n_subsample)
-    ll_mir.append(ll)
-    errors_mir.append(bbi.compute_errors(ll_true, ll))
-    nodes_mir.append(nodes)
     
-np.savez('nongauss/03_miracle.npz',
-         #ll_mir = ll_mir, 
-         nodes_mir = nodes_mir, 
-         errors_mir = errors_mir)
+    gpe = bbi.GpeSquaredExponential([40, 350, 150, 22, 8, 1.5], 530, n_output)
+
+    ll, nodes, _ = bbi.design_linearized(problem, gpe, n_iterations, n_subsample = n_subsample)
+    errors_mir.append(bbi.compute_errors(ll_true, ll))
+
+errors_mir = np.array(errors_mir)
+
+np.save('output/02_error_miracle.npy', errors_mir)
+
+#%% Check sensitivity to the prior
+np.random.seed(0)
+
+mix1 = bbi.MixSquaredExponential([0.01, 100], [0.001, 1e5], n_output, anisotropy = 6)
+
+mix2 = bbi.MixSquaredExponential([0.1, 100], [0.01, 1e5], n_output, anisotropy = 6)
+
+mix3 = bbi.MixSquaredExponential([0.1, 10], [0.01, 1e4], n_output, anisotropy = 6)
+
+
+t_start = time.time()
+ll_p1, nodes_p1, n_eval = bbi.design_map(problem, mix1, n_iterations, n_subsample=n_subsample)
+ll_p2, nodes_p2, _      = bbi.design_map(problem, mix2, n_iterations, n_subsample=n_subsample)
+ll_p3, nodes_p3, _      = bbi.design_map(problem, mix3, n_iterations, n_subsample=n_subsample)
+t_end = time.time()
+
+e1 = bbi.compute_errors(ll_true, ll_p1)
+e2 = bbi.compute_errors(ll_true, ll_p2)
+e3 = bbi.compute_errors(ll_true, ll_p3)
+
+np.savez('output/02_prior_sensitivity_ll.npz',
+         n_eval = n_eval,
+         ll_p1 = ll_p1, nodes_p1 = nodes_p3,
+         ll_p2 = ll_p2, nodes_p2 = nodes_p2,
+         ll_p3 = ll_p3, nodes_p3 = nodes_p1,
+         )
+
+plt.semilogy(n_eval,e1,n_eval,e2,n_eval,e3)
